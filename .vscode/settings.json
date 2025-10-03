@@ -1,0 +1,7 @@
+{
+    "java.project.sourcePaths": [
+        "server/test/java/com/cloudmanagment/server",
+        "server/main/java/com/cloudmanagment/server",
+        "server/src/main/java/com/cloudmanagement/server"
+    ]
+}

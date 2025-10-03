@@ -53,3 +53,8 @@ For more information, direct to https://start.spring.io/ and manually generate P
 - Spring Security (for authentication)
 
 Unzip the file and move its contents into empty backend or server directory.
+
+- Start Backend (Ensure Database: PostgreSQL, etc is running)
+```
+mvn spring-boot:run
+```
