@@ -28,3 +28,28 @@ Backend (Java / Spring Boot)
 - Deployment Packaging: Dockerfile to containerize the Spring Boot JAR for modern deployment.
 
 AWS Infrastructure
+
+
+
+
+## Configuration
+Backend Config:
+- Generates a Maven project with the core dependencies and unzips it directly into the backend-api folder
+```
+curl https://start.spring.io/starter.zip \
+-d dependencies=web,data-jpa,postgresql,security \
+-d type=maven-project \
+-d name=server \
+-d artifactId=server \
+-d groupId=com.cloudmanagement \
+-d javaVersion=17 \
+-d packageName=com.cloudmanagement.server \
+| tar -xzvf - -C server --strip-components 1
+```
+For more information, direct to https://start.spring.io/ and manually generate Parameters and add dependencies:
+- Spring Web (for REST endpoints)
+- Spring Data JPA (for database access)
+- PostgreSQL Driver (or MySQL Driver)
+- Spring Security (for authentication)
+
+Unzip the file and move its contents into empty backend or server directory.
