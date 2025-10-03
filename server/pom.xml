@@ -65,6 +65,9 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<mainClass>com.cloudmanagement.server.ServerApplication</mainClass>
+            </configuration>
 			</plugin>
 		</plugins>
 	</build>
