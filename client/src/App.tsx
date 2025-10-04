@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 
-// IMPORTANT: Use the password you got from the Spring Boot startup log!
+// Use the password you got from the Spring Boot startup log!
 const USERNAME = 'user';
-const PASSWORD = '868b373e-ee0d-4eb3-9f32-58b701b93387';
+const PASSWORD = '3c80a7f1-5650-4325-9c54-a41782faf6ea';
 
 function App() {
   const [message, setMessage] = useState<string>('Loading...');

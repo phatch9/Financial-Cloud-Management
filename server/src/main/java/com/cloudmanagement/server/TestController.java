@@ -1,5 +1,4 @@
-package com.cloudmanagement.server.controller;
-
+package com.cloudmanagement.server;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
