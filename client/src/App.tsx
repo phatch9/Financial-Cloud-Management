@@ -30,10 +30,10 @@ interface Budget {
   category: string;
 }
 
-// The default generated password from your Spring Security log (USE YOUR OWN!):
-const DEFAULT_GENERATED_PASSWORD = '868b373e-ee0d-4eb3-9f32-58b701b93387'; 
-const API_URL_TEST = '/api/test'; 
-const API_URL_BUDGETS = '/api/budgets'; 
+// The default generated password from your Spring Security log:
+const DEFAULT_GENERATED_PASSWORD = '4555c6e4-ffcf-4e08-a7fa-4facefb9e5a8';
+const API_URL_TEST = '/api/test';
+const API_URL_BUDGETS = '/api/budgets';
 
 
 // Authentication Context and Logic
