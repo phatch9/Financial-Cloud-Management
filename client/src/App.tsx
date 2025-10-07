@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useContext, createContext, useCallback } from 'react';
 import { Buffer } from 'buffer'; // FIX: Explicitly import Buffer polyfill for browser environment
-// Removed: import './App.css'; - All styling is handled by Tailwind CSS
 
-// === Global Type Definitions ===
+// ---Global Type Definitions & Constants---
 
 /** Defines the shape of the user's authentication data. */
 interface AuthState {
@@ -10,7 +9,7 @@ interface AuthState {
   username: string | null;
   password: string | null;
   // Encoded base64 string for Authorization header
-  authHeader: string | null;
+  authHeader: string | null; 
 }
 
 /** Defines the functions exposed by the Auth Context. */
@@ -22,28 +21,22 @@ interface AuthContextType extends AuthState {
 /** Defines the current page for simple state-based routing. */
 type Page = 'dashboard' | 'budgets' | 'transactions';
 
-/** Defines the structure of a budget object. */
+/** Defines the structure of a budget object. NOTE: Backend uses BigDecimal, so frontend uses string/number. */
 interface Budget {
   id: number;
   name: string;
-  amount: number;
-  spent: number;
+  amount: number; // Stored as a number in TS for easier calculation
+  spent: number;  // Stored as a number in TS for easier calculation
   category: string;
 }
 
-
-// === Global Constants ===
-
-// The default generated password from your Spring Security log:
-const DEFAULT_GENERATED_PASSWORD = '62d7abc2-4fdc-4c36-955e-8de68cf655bf'; 
+// The default generated password from your Spring Security log (USE YOUR OWN!):
+const DEFAULT_GENERATED_PASSWORD = '868b373e-ee0d-4eb3-9f32-58b701b93387'; 
 const API_URL_TEST = '/api/test'; 
-const API_URL_LOGOUT = '/logout'; // Spring Security default logout endpoint
-const API_URL_BUDGETS = '/api/budgets'; // New API endpoint placeholder
+const API_URL_BUDGETS = '/api/budgets'; 
 
-// Declare Buffer globally for Basic Auth encoding in a Vite environment
-// NOTE: This line is removed as Buffer is now explicitly imported above.
 
-// === Authentication Context ===
+// Authentication Context and Logic
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -62,8 +55,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     const base64Credentials = Buffer.from(`${username}:${password}`).toString('base64');
     const authHeader = `Basic ${base64Credentials}`;
 
-    // Normally, a real login would hit a Spring Security /login endpoint here,
-    // but since we are using Basic Auth, we'll just store the credentials on success.
     setAuthState({
       isAuthenticated: true,
       username,
@@ -75,8 +66,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const logout = useCallback(() => {
     // Clear credentials and state
     setAuthState(initialAuthState);
-    // Note: A real app would typically make a POST request to /logout here.
-    // For this demonstration, clearing state is sufficient for frontend security.
   }, []);
 
   const value = { ...authState, login, logout };
@@ -109,7 +98,6 @@ const testBackendConnection = async (authHeader: string | null): Promise<string>
         });
 
         if (!response.ok) {
-            // Check for specific error status codes
             if (response.status === 401 || response.status === 403) {
                 return `Authentication Failed (Status: ${response.status}). Check credentials.`;
             }
@@ -126,7 +114,7 @@ const testBackendConnection = async (authHeader: string | null): Promise<string>
     }
 };
 
-// === UI Components ===
+// === Feature Components: UI, Logic, and State ===
 
 /** Login Component */
 const LoginComponent: React.FC = () => {
@@ -137,8 +125,6 @@ const LoginComponent: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this is where you'd send credentials to /login.
-    // Since we are using Basic Auth for simplicity, we immediately call login.
     login(username, password);
     setMessage('Attempting login...');
   };
@@ -264,7 +250,7 @@ const BudgetsComponent: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Function to fetch budgets (currently using mock data as the backend endpoint is not yet created)
+    // Function to fetch budgets from the Spring Boot API
     const fetchBudgets = useCallback(async () => {
         if (!authHeader) {
             setError("Authentication required to fetch budgets.");
@@ -275,42 +261,44 @@ const BudgetsComponent: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        // Simulating API call delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-
         try {
-            // NOTE: Once the Spring Boot endpoint /api/budgets is ready, uncomment the fetch block:
-            /*
             const response = await fetch(API_URL_BUDGETS, {
                 headers: { 'Authorization': authHeader },
             });
 
             if (!response.ok) {
-                 throw new Error(`Failed to fetch budgets: ${response.status}`);
+                const errorBody = await response.text();
+                throw new Error(`Failed to fetch budgets: ${response.status} - ${errorBody.substring(0, 50)}...`);
             }
-            const data: Budget[] = await response.json();
-            setBudgets(data);
-            */
             
-            // --- Mock Data for Development ---
-            const mockData: Budget[] = [
-                { id: 1, name: 'Cloud Compute (AWS)', amount: 5000, spent: 3200, category: 'Infrastructure' },
-                { id: 2, name: 'Software Licences (Q3)', amount: 1500, spent: 500, category: 'Software' },
-                { id: 3, name: 'Server Hardware Refresh', amount: 8000, spent: 8000, category: 'Hardware' },
-            ];
-            setBudgets(mockData);
-            // ---------------------------------
+            // The JSON response from the backend contains BigDecimal which is read as strings by JavaScript.
+            // We map the array to convert 'amount' and 'spent' to numbers for calculations.
+            const data: any[] = await response.json();
+            const formattedBudgets: Budget[] = data.map(b => ({
+                id: b.id,
+                name: b.name,
+                category: b.category,
+                // Convert BigDecimal strings to floating point numbers
+                amount: parseFloat(b.amount),
+                spent: parseFloat(b.spent) 
+            }));
+
+            setBudgets(formattedBudgets);
 
         } catch (e) {
-            setError("Failed to fetch budgets. Using mock data for now.");
+            const message = e instanceof Error ? e.message : "An unknown error occurred.";
+            setError(`Error fetching budgets: ${message}`);
         } finally {
             setLoading(false);
         }
     }, [authHeader]);
 
     useEffect(() => {
-        fetchBudgets();
-    }, [fetchBudgets]);
+        // Only fetch when authenticated
+        if (authHeader) {
+            fetchBudgets();
+        }
+    }, [fetchBudgets, authHeader]);
     
     const formatCurrency = (value: number) => `$${value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
     const getRemaining = (budget: Budget) => budget.amount - budget.spent;
@@ -328,7 +316,7 @@ const BudgetsComponent: React.FC = () => {
                 </button>
             </header>
 
-            {loading && <p className="text-center text-gray-500">Loading budgets...</p>}
+            {loading && <p className="text-center text-gray-500 p-8">Loading budgets from Spring Boot API...</p>}
             {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded-lg">{error}</p>}
             
             <div className="space-y-4">
@@ -383,7 +371,7 @@ const BudgetsComponent: React.FC = () => {
                     );
                 })}
                 {!loading && budgets.length === 0 && !error && (
-                    <p className="text-center text-gray-500 p-8 border-2 border-dashed rounded-xl">No budgets found. Click "+ Add New Budget" to get started.</p>
+                    <p className="text-center text-gray-500 p-8 border-2 border-dashed rounded-xl">No budgets found. Check your backend logs or database connection.</p>
                 )}
             </div>
         </div>
@@ -400,7 +388,7 @@ const TransactionsComponent: React.FC = () => (
 );
 
 
-// === Main Application Component ===
+// === Main App Structure and Router ===
 
 const AppContent: React.FC = () => {
     const { isAuthenticated, logout, username } = useAuth();
