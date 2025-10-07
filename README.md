@@ -31,7 +31,7 @@ AWS Infrastructure
 
 
 
-
+---
 ## Configuration
 Backend Config:
 - Generates a Maven project with the core dependencies and unzips it directly into the backend-api folder
@@ -58,3 +58,15 @@ Unzip the file and move its contents into empty backend or server directory.
 ```
 mvn spring-boot:run
 ```
+---
+POSTGRE Notes:
+- Always check the role of user and grant permission for user:
+- Connect to the PostgreSQL with identified SuperUser
+```
+psql -U /user/ postgres
+```
+- List all roles to identify the superUser at the prompt postgre=>
+```
+\du
+```
+---
