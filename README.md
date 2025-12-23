@@ -1,5 +1,5 @@
 # Cloud-Budget-Management
-A Multi-users Full-stack application with Java, Spring Boot, and AWS infrastructure that allows users to track income and expenses, and visualize their finances
+### A Multi-users Full-stack application with Java, Spring Boot, and AWS infrastructure that allows users to track income and expenses, and visualize their finances
 --
 ## Core Features:
 | Features | Description | Implementation |
@@ -65,8 +65,8 @@ POSTGRE Notes:
 ```
 psql -U /user/ postgres
 ```
-- List all roles to identify the superUser at the prompt postgre=>
+- List all roles to identify the superUser at the prompt:
 ```
-\du
+postgre=> \du
 ```
 ---
