@@ -3,10 +3,15 @@ package com.cloudmanagement.server.model;
 import java.math.BigDecimal;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Table; 
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * JPA Entity representing a Budget item.
@@ -23,22 +28,29 @@ public class Budget {
     private String name;
 
     private String category;
-    
+
     // Use BigDecimal for currency to avoid floating-point errors
     private BigDecimal amount;
 
     // Field to track amount has been spent against this budget
     private BigDecimal spent;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    @JsonIgnore
+    private User user;
+
     // Default constructor required by JPA
-    public Budget() {}
+    public Budget() {
+    }
 
     // Constructor for easy object creation
-    public Budget(String name, String category, BigDecimal amount, BigDecimal spent) {
+    public Budget(String name, String category, BigDecimal amount, BigDecimal spent, User user) {
         this.name = name;
         this.category = category;
         this.amount = amount;
         this.spent = spent;
+        this.user = user;
     }
 
     // --- Getters and Setters ---
@@ -81,5 +93,13 @@ public class Budget {
 
     public void setSpent(BigDecimal spent) {
         this.spent = spent;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 }
