@@ -1,6 +1,5 @@
 package com.cloudmanagement.server.controller;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +7,8 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,11 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.cloudmanagement.server.model.Transaction;
 import com.cloudmanagement.server.model.Transaction.TransactionType;
+import com.cloudmanagement.server.model.User;
 import com.cloudmanagement.server.repository.TransactionRepository;
+import com.cloudmanagement.server.service.AuthService;
 
 /**
  * REST Controller for Transaction management.
- * All endpoints here are protected by Spring Security (Basic Auth).
+ * All endpoints here are protected by Spring Security.
  * Base path: /api/transactions
  */
 @RestController
@@ -32,71 +35,41 @@ import com.cloudmanagement.server.repository.TransactionRepository;
 public class TransactionController {
 
     private final TransactionRepository transactionRepository;
+    private final AuthService authService;
 
     @Autowired
-    public TransactionController(TransactionRepository transactionRepository) {
+    public TransactionController(TransactionRepository transactionRepository, AuthService authService) {
         this.transactionRepository = transactionRepository;
-        initializeMockData(); // Initialize mock data for quick testing
+        this.authService = authService;
     }
 
-    /**
-     * Helper method to initialize some transaction data for immediate testing.
-     */
-    private void initializeMockData() {
-        try {
-            if (transactionRepository.count() == 0) {
-                transactionRepository.save(new Transaction(
-                        "AWS EC2 Instance - Monthly",
-                        new BigDecimal("450.00"),
-                        "Infrastructure",
-                        LocalDateTime.now().minusDays(5),
-                        TransactionType.EXPENSE));
-
-                transactionRepository.save(new Transaction(
-                        "Client Payment - Project Alpha",
-                        new BigDecimal("5000.00"),
-                        "Income",
-                        LocalDateTime.now().minusDays(3),
-                        TransactionType.INCOME));
-
-                transactionRepository.save(new Transaction(
-                        "Office 365 Subscription",
-                        new BigDecimal("150.00"),
-                        "Software",
-                        LocalDateTime.now().minusDays(1),
-                        TransactionType.EXPENSE));
-
-                transactionRepository.save(new Transaction(
-                        "Dell Server Purchase",
-                        new BigDecimal("3200.00"),
-                        "Hardware",
-                        LocalDateTime.now().minusDays(10),
-                        TransactionType.EXPENSE));
-
-                System.out.println("--- TransactionController: Initialized 4 mock transaction items. ---");
-            }
-        } catch (Exception e) {
-            System.err.println("--- TransactionController: Failed to initialize mock data: " + e.getMessage() + " ---");
-        }
+    // Helper to get current user from security context
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authService.getCurrentUser(authentication.getName());
     }
 
     /**
      * GET /api/transactions
-     * Fetches all transactions ordered by date (most recent first).
+     * Fetches all transactions for current user ordered by date (most recent
+     * first).
      */
     @GetMapping
     public List<Transaction> getAllTransactions() {
-        return transactionRepository.findAllByOrderByTransactionDateDesc();
+        return transactionRepository.findByUserIdOrderByTransactionDateDesc(getCurrentUser().getId());
     }
 
     /**
      * POST /api/transactions
-     * Creates a new transaction.
+     * Creates a new transaction for current user.
      */
     @PostMapping
     public Transaction createTransaction(@RequestBody Transaction transaction) {
+        User user = getCurrentUser();
+
         // Ensure ID is null for creation
         transaction.setId(null);
+        transaction.setUser(user);
 
         // Set transaction date to now if not provided
         if (transaction.getTransactionDate() == null) {
@@ -113,8 +86,12 @@ public class TransactionController {
     @GetMapping("/{id}")
     public ResponseEntity<Transaction> getTransactionById(@PathVariable Long id) {
         Optional<Transaction> transaction = transactionRepository.findById(id);
-        return transaction.map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+
+        if (transaction.isPresent() && transaction.get().getUser().getId().equals(getCurrentUser().getId())) {
+            return ResponseEntity.ok(transaction.get());
+        }
+
+        return ResponseEntity.notFound().build();
     }
 
     /**
@@ -125,9 +102,16 @@ public class TransactionController {
     public ResponseEntity<Transaction> updateTransaction(@PathVariable Long id,
             @RequestBody Transaction updatedTransaction) {
         Optional<Transaction> existingTransaction = transactionRepository.findById(id);
+        Long userId = getCurrentUser().getId();
 
         if (existingTransaction.isPresent()) {
             Transaction transaction = existingTransaction.get();
+
+            // Check ownership
+            if (!transaction.getUser().getId().equals(userId)) {
+                return ResponseEntity.notFound().build();
+            }
+
             transaction.setDescription(updatedTransaction.getDescription());
             transaction.setAmount(updatedTransaction.getAmount());
             transaction.setCategory(updatedTransaction.getCategory());
@@ -148,7 +132,10 @@ public class TransactionController {
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
-        if (transactionRepository.existsById(id)) {
+        Optional<Transaction> transaction = transactionRepository.findById(id);
+        Long userId = getCurrentUser().getId();
+
+        if (transaction.isPresent() && transaction.get().getUser().getId().equals(userId)) {
             transactionRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         } else {
@@ -158,16 +145,16 @@ public class TransactionController {
 
     /**
      * GET /api/transactions/category/{category}
-     * Fetches all transactions for a specific category.
+     * Fetches all transactions for a specific category for current user.
      */
     @GetMapping("/category/{category}")
     public List<Transaction> getTransactionsByCategory(@PathVariable String category) {
-        return transactionRepository.findByCategory(category);
+        return transactionRepository.findByUserIdAndCategory(getCurrentUser().getId(), category);
     }
 
     /**
      * GET /api/transactions/date-range
-     * Fetches transactions within a date range.
+     * Fetches transactions within a date range for current user.
      * Example:
      * /api/transactions/date-range?start=2024-01-01T00:00:00&end=2024-12-31T23:59:59
      */
@@ -175,24 +162,24 @@ public class TransactionController {
     public List<Transaction> getTransactionsByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return transactionRepository.findByTransactionDateBetween(start, end);
+        return transactionRepository.findByUserIdAndTransactionDateBetween(getCurrentUser().getId(), start, end);
     }
 
     /**
      * GET /api/transactions/budget/{budgetId}
-     * Fetches all transactions linked to a specific budget.
+     * Fetches all transactions linked to a specific budget for current user.
      */
     @GetMapping("/budget/{budgetId}")
     public List<Transaction> getTransactionsByBudget(@PathVariable Long budgetId) {
-        return transactionRepository.findByBudgetId(budgetId);
+        return transactionRepository.findByUserIdAndBudgetId(getCurrentUser().getId(), budgetId);
     }
 
     /**
      * GET /api/transactions/type/{type}
-     * Fetches all transactions by type (INCOME or EXPENSE).
+     * Fetches all transactions by type (INCOME or EXPENSE) for current user.
      */
     @GetMapping("/type/{type}")
     public List<Transaction> getTransactionsByType(@PathVariable TransactionType type) {
-        return transactionRepository.findByType(type);
+        return transactionRepository.findByUserIdAndType(getCurrentUser().getId(), type);
     }
 }
