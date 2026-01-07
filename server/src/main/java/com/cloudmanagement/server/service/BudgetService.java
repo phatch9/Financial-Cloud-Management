@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.cloudmanagement.server.model.Budget;
 import com.cloudmanagement.server.model.Transaction;
-import com.cloudmanagement.server.model.Transaction.TransactionType;
+import com.cloudmanagement.server.model.User;
 import com.cloudmanagement.server.repository.BudgetRepository;
 import com.cloudmanagement.server.repository.TransactionRepository;
 
@@ -30,88 +30,63 @@ public class BudgetService {
         this.transactionRepository = transactionRepository;
     }
 
-    /**
-     * Get all budgets.
-     */
-    public List<Budget> getAllBudgets() {
-        return budgetRepository.findAll();
-    }
-
-    /**
-     * Get a budget by ID.
-     */
-    public Optional<Budget> getBudgetById(Long id) {
-        return budgetRepository.findById(id);
-    }
-
-    /**
-     * Create a new budget.
-     */
-    public Budget createBudget(Budget budget) {
-        budget.setId(null);
-        if (budget.getSpent() == null) {
-            budget.setSpent(BigDecimal.ZERO);
+    public List<Budget> getAllBudgets(Long userId) {
+        // Calculate spent amount for each budget dynamically
+        List<Budget> budgets = budgetRepository.findByUserId(userId);
+        for (Budget budget : budgets) {
+            recalculateBudgetSpent(budget);
         }
+        return budgets;
+    }
+
+    public Optional<Budget> getBudgetById(Long id, Long userId) {
+        Optional<Budget> budget = budgetRepository.findById(id);
+        if (budget.isPresent() && !budget.get().getUser().getId().equals(userId)) {
+            return Optional.empty(); // Not authorized
+        }
+        budget.ifPresent(this::recalculateBudgetSpent);
+        return budget;
+    }
+
+    public Budget createBudget(Budget budget, User user) {
+        budget.setUser(user);
+        budget.setSpent(BigDecimal.ZERO);
         return budgetRepository.save(budget);
     }
 
-    /**
-     * Update an existing budget.
-     */
-    public Optional<Budget> updateBudget(Long id, Budget updatedBudget) {
-        Optional<Budget> existingBudget = budgetRepository.findById(id);
-
-        if (existingBudget.isPresent()) {
-            Budget budget = existingBudget.get();
-            budget.setName(updatedBudget.getName());
-            budget.setCategory(updatedBudget.getCategory());
-            budget.setAmount(updatedBudget.getAmount());
-            // Don't update spent directly - it should be calculated from transactions
-            return Optional.of(budgetRepository.save(budget));
-        }
-
-        return Optional.empty();
+    public Budget updateBudget(Long id, Budget budgetDetails, Long userId) {
+        return getBudgetById(id, userId)
+                .map(budget -> {
+                    budget.setName(budgetDetails.getName());
+                    budget.setCategory(budgetDetails.getCategory());
+                    budget.setAmount(budgetDetails.getAmount());
+                    return budgetRepository.save(budget);
+                })
+                .orElseThrow(() -> new RuntimeException("Budget not found or unauthorized"));
     }
 
-    /**
-     * Delete a budget by ID.
-     */
-    public boolean deleteBudget(Long id) {
-        if (budgetRepository.existsById(id)) {
-            budgetRepository.deleteById(id);
-            return true;
-        }
-        return false;
+    public void deleteBudget(Long id, Long userId) {
+        getBudgetById(id, userId).ifPresent(budget -> budgetRepository.deleteById(id));
     }
 
-    /**
-     * Recalculate the spent amount for a budget based on linked transactions.
-     * This should be called when transactions are added/updated/deleted.
-     */
-    @Transactional
-    public void recalculateBudgetSpent(Long budgetId) {
-        Optional<Budget> budgetOpt = budgetRepository.findById(budgetId);
+    private void recalculateBudgetSpent(Budget budget) {
+        // Find all transactions for this budget (and owned by same user)
+        List<Transaction> transactions = transactionRepository.findByUserIdAndBudgetId(
+                budget.getUser().getId(),
+                budget.getId());
 
-        if (budgetOpt.isPresent()) {
-            Budget budget = budgetOpt.get();
-            List<Transaction> transactions = transactionRepository.findByBudgetId(budgetId);
+        // Sum up expense transactions
+        BigDecimal totalSpent = transactions.stream()
+                .filter(t -> t.getType() == Transaction.TransactionType.EXPENSE)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // Sum up all EXPENSE transactions linked to this budget
-            BigDecimal totalSpent = transactions.stream()
-                    .filter(t -> t.getType() == TransactionType.EXPENSE)
-                    .map(Transaction::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            budget.setSpent(totalSpent);
-            budgetRepository.save(budget);
-        }
+        budget.setSpent(totalSpent);
+        budgetRepository.save(budget);
     }
 
-    /**
-     * Get budget summary with analytics.
-     */
-    public BudgetSummary getBudgetSummary() {
-        List<Budget> budgets = budgetRepository.findAll();
+    public BudgetSummary getBudgetSummary(Long userId) {
+        List<Budget> budgets = getAllBudgets(userId); // already recalculates spent
 
         BigDecimal totalBudgeted = budgets.stream()
                 .map(Budget::getAmount)
@@ -121,27 +96,28 @@ public class BudgetService {
                 .map(Budget::getSpent)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal totalRemaining = totalBudgeted.subtract(totalSpent);
-
         long overBudgetCount = budgets.stream()
                 .filter(b -> b.getSpent().compareTo(b.getAmount()) > 0)
                 .count();
 
-        return new BudgetSummary(totalBudgeted, totalSpent, totalRemaining, overBudgetCount, budgets.size());
+        return new BudgetSummary(
+                totalBudgeted,
+                totalSpent,
+                totalBudgeted.subtract(totalSpent),
+                (int) overBudgetCount,
+                budgets.size());
     }
 
-    /**
-     * Inner class to represent budget summary data.
-     */
+    // DTO for summary
     public static class BudgetSummary {
         private BigDecimal totalBudgeted;
         private BigDecimal totalSpent;
         private BigDecimal totalRemaining;
-        private long overBudgetCount;
+        private int overBudgetCount;
         private int totalBudgets;
 
-        public BudgetSummary(BigDecimal totalBudgeted, BigDecimal totalSpent,
-                BigDecimal totalRemaining, long overBudgetCount, int totalBudgets) {
+        public BudgetSummary(BigDecimal totalBudgeted, BigDecimal totalSpent, BigDecimal totalRemaining,
+                int overBudgetCount, int totalBudgets) {
             this.totalBudgeted = totalBudgeted;
             this.totalSpent = totalSpent;
             this.totalRemaining = totalRemaining;
@@ -162,7 +138,7 @@ public class BudgetService {
             return totalRemaining;
         }
 
-        public long getOverBudgetCount() {
+        public int getOverBudgetCount() {
             return overBudgetCount;
         }
 
