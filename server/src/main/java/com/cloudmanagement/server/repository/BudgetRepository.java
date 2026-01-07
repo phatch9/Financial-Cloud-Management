@@ -1,5 +1,7 @@
 package com.cloudmanagement.server.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -11,5 +13,6 @@ import com.cloudmanagement.server.model.Budget;
  */
 @Repository
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
-    // Basic CRUD operations are inherited from JpaRepository
+
+    List<Budget> findByUserId(Long userId);
 }
