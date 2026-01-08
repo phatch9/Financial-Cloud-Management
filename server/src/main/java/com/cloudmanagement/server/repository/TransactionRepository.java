@@ -40,4 +40,29 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      * Find all transactions ordered by date descending (most recent first).
      */
     List<Transaction> findAllByOrderByTransactionDateDesc();
+
+    /**
+     * Find all transactions by user ID ordered by date descending.
+     */
+    List<Transaction> findByUserIdOrderByTransactionDateDesc(Long userId);
+
+    /**
+     * Find transactions by user ID and category.
+     */
+    List<Transaction> findByUserIdAndCategory(Long userId, String category);
+
+    /**
+     * Find transactions by user ID and type.
+     */
+    List<Transaction> findByUserIdAndType(Long userId, TransactionType type);
+
+    /**
+     * Find transactions by user ID within date range.
+     */
+    List<Transaction> findByUserIdAndTransactionDateBetween(Long userId, LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Find transactions by user ID and budget ID.
+     */
+    List<Transaction> findByUserIdAndBudgetId(Long userId, Long budgetId);
 }
